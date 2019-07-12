@@ -1,11 +1,30 @@
+
 """
-Usage: python -m unittest test_client.py
+    Это unittest для тестирования вашего класса Client из задания на неделе 5.
+
+    Для запуска теста на локальном компьютере разместите код unittest-та
+    и код решения в одном каталоге. Запустите тест при помощи команды:
+
+        python -m unittest test_week5.py
+
+    Обратите внимание на то, что ваш модуль должен называться client.py.
+    Это не обязательное требование, если вы назвали мобуль по-другому, то
+    просто измените его импорт в строке 26 на:
+        from you_module_name import Client, ClientError
+
+    Модуль должен содержать классы Client и ClientError.
+
+    Этот unittest поможет вам выполнить задание и пройти проверку на курсере.
+    Успехов!
 """
 
 import unittest
 from unittest.mock import patch
 from collections import deque
+
+# импорт модуля с решением
 from client import Client, ClientError
+
 
 class ServerSocketException(Exception):
     pass
@@ -22,9 +41,9 @@ class ServerSocket:
             b'put test 0.4 2\n': b'ok\n\n',
             b'put load 301 3\n': b'ok\n\n',
             b'get key_not_exists\n': b'ok\n\n',
-            b'get test\n': b'ok\n'
-                           b'test 0.5 1\n'
-                           b'test 0.4 2\n\n',
+            b'get test\n':  b'ok\n'
+                            b'test 0.5 1\n'
+                            b'test 0.4 2\n\n',
             b'get get_client_error\n': b'error\nwrong command\n\n',
             b'get *\n': b'ok\n'
                         b'test 0.5 1\n'
@@ -33,7 +52,7 @@ class ServerSocket:
         }
 
     def sendall(self, data):
-        return self.send(data)
+        self.send(data)
 
     def send(self, data):
         if data in self.rsp_map:
@@ -41,7 +60,7 @@ class ServerSocket:
         else:
             raise ServerSocketException(f"запрос не соответствует протоколу: {data}")
 
-    def recv(self, bytes_count):
+    def recv(self, size):
         try:
             rsp = self.response_buf.popleft()
         except IndexError:
@@ -59,9 +78,9 @@ class ServerSocket:
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
 
-    def __getattr__(self, feature):
-        """ignore socket.connect, soket.bind, etc..."""
-        pass
+    # def __getattr__(self, feature):
+    #     """ignore socket.connect, soket.bind, etc..."""
+    #     pass
 
 
 class TestClient(unittest.TestCase):
@@ -86,55 +105,54 @@ class TestClient(unittest.TestCase):
             except ServerSocketException as exp:
                 message = exp.args[0]
                 self.fail(f"Ошибка вызова client.put("
-                          f"'{metric}', {value}, timestamp={timestamp})\n{message}")
+                            f"'{metric}', {value}, timestamp={timestamp})\n{message}")
 
-    # @patch("socket.create_connection", ServerSocket.create_connection)
-    # @patch("socket.socket", ServerSocket.create_connection)
-    # def test_client_get_key(self):
-    #     try:
-    #         rsp = self.client.get("test")
-    #     except ServerSocketException as exp:
-    #         message = exp.args[0]
-    #         self.fail(f"Ошибка вызова client.get('test')\n{message}")
+    @patch("socket.create_connection", ServerSocket.create_connection)
+    @patch("socket.socket", ServerSocket.create_connection)
+    def test_client_get_key(self):
+        try:
+            rsp = self.client.get("test")
+        except ServerSocketException as exp:
+            message = exp.args[0]
+            self.fail(f"Ошибка вызова client.get('test')\n{message}")
 
-    #     metrics_fixture = {
-    #         "test": [(1, .5), (2, .4)],
-    #     }
-    #     self.assertEqual(rsp, metrics_fixture)
+        metrics_fixture = {
+            "test": [(1, .5), (2, .4)],
+        }
+        self.assertEqual(rsp, metrics_fixture)
 
+    @patch("socket.create_connection", ServerSocket.create_connection)
+    @patch("socket.socket", ServerSocket.create_connection)
+    def test_client_get_all(self):
+        try:
+            rsp = self.client.get("*")
+        except ServerSocketException as exp:
+            message = exp.args[0]
+            self.fail(f"Ошибка вызова client.get('*')\n{message}")
 
-    # @patch("socket.create_connection", ServerSocket.create_connection)
-    # @patch("socket.socket", ServerSocket.create_connection)
-    # def test_client_get_all(self):
-    #     try:
-    #         rsp = self.client.get("*")
-    #     except ServerSocketException as exp:
-    #         message = exp.args[0]
-    #         self.fail(f"Ошибка вызова client.get('*')\n{message}")
+        metrics_fixture = {
+            "test": [(1, .5), (2, .4)],
+            "load": [(3, 301.0)]
+        }
+        self.assertEqual(rsp, metrics_fixture)
 
-    #     metrics_fixture = {
-    #         "test": [(1, .5), (2, .4)],
-    #         "load": [(3, 301.0)]
-    #     }
-    #     self.assertEqual(rsp, metrics_fixture)
+    @patch("socket.create_connection", ServerSocket.create_connection)
+    @patch("socket.socket", ServerSocket.create_connection)
+    def test_client_get_not_exists(self):
+        try:
+            rsp = self.client.get("key_not_exists")
+        except ServerSocketException as exp:
+            message = exp.args[0]
+            self.fail(f"Ошибка вызова client.get('key_not_exists')\n{message}")
 
-    # @patch("socket.create_connection", ServerSocket.create_connection)
-    # @patch("socket.socket", ServerSocket.create_connection)
-    # def test_client_get_not_exists(self):
-    #     try:
-    #         rsp = self.client.get("key_not_exists")
-    #     except ServerSocketException as exp:
-    #         message = exp.args[0]
-    #         self.fail(f"Ошибка вызова client.get('key_not_exists')\n{message}")
+        self.assertEqual({}, rsp, "check rsp eq {}")
 
-    #     self.assertEqual({}, rsp, "check rsp eq {}")
-
-    # @patch("socket.create_connection", ServerSocket.create_connection)
-    # @patch("socket.socket", ServerSocket.create_connection)
-    # def test_client_get_client_error(self):
-    #     try:
-    #         self.assertRaises(ClientError,
-    #                           self.client.get, "get_client_error")
-    #     except ServerSocketException as exp:
-    #         message = exp.args[0]
-    #         self.fail(f"Некорректно обработано сообщение сервера об ошибке: {message}")
+    @patch("socket.create_connection", ServerSocket.create_connection)
+    @patch("socket.socket", ServerSocket.create_connection)
+    def test_client_get_client_error(self):
+        try:
+            self.assertRaises(ClientError,
+                                self.client.get, "get_client_error")
+        except ServerSocketException as exp:
+            message = exp.args[0]
+            self.fail(f"Некорректно обработано сообщение сервера об ошибке: {message}")
