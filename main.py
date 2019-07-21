@@ -53,10 +53,11 @@ def run(host, port):
             print(f"client.get('*') вернул неверный результат. Ожидается: {expected_metrics}. Получено: {metrics}")
             sys.exit(1)
     except Exception as err:
+        raise
         print(f"Ошибка вызова client.get('*') {err.__class__}: {err}")
         sys.exit(1)
 
-    expected_metrics = {"k2": [(4, 30.0), (5, 40.0)]}
+    # expected_metrics = {"k2": [(4, 30.0), (5, 40.0)]}
 
     try:
         metrics = client2.get("k2")
