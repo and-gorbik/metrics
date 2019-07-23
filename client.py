@@ -75,14 +75,15 @@ class Client:
 
         # читаем ответ
         payload = self._read()
-        print(payload)
         data = {}
         if payload == "":
             return data
 
         # разбираем ответ для команды get
         for row in payload.split("\n"):
+            print(row)
             key, value, timestamp = row.split()
+            print(f"key: {key}\nvalue: {value}\ntimestamp: {timestamp}")
             if key not in data:
                 data[key] = []
             data[key].append((int(timestamp), float(value)))
