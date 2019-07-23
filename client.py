@@ -1,113 +1,70 @@
 import socket
-import time
-
+from time import time
 
 class ClientError(Exception):
-    """Общий класс исключений клиента"""
     pass
-
-
-class ClientSocketError(ClientError):
-    """Исключение, выбрасываемое клиентом при сетевой ошибке"""
-    pass
-
-
-class ClientProtocolError(ClientError):
-    """Исключение, выбрасываемое клиентом при ошибке протокола"""
-    pass
-
 
 class Client:
-    def __init__(self, host, port, timeout=None):
-        # класс инкапсулирует создание сокета
-        # создаем клиентский сокет, запоминаем объект socke.socket в self 
-        self.host = host
-        self.port = port
-        try:
-            self.connection = socket.create_connection((host, port), timeout)
-        except socket.error as err:
-            raise ClientSocketError("error create connection", err)
+    def __init__(self, ip='127.0.0.1', port=11111, timeout=None):
+        self._ip = ip
+        self._port = port
+        self._timeout = timeout
 
-    def _read(self):
-        """Метод для чтения ответа сервера"""
-        data = b""
-        # накапливаем буфер, пока не встретим "\n\n" в конце команды
-        while not data.endswith(b"\n\n"):
+
+    def put(self, key, value, timestamp=time()):
+        try:
+            request = "put {} {} {}\n".format(key, value, int(timestamp))
+        except ValueError:
+            raise ClientError(f"Incorrect request:\n{request}\n")
+        response = self._send(request)
+        status, msg = response.split("\n", 1)
+        if "error" in status:
+            raise ClientError(f"{msg}\n")
+
+    def get(self, key) -> dict:
+        request = f"get {key}\n"
+        response = self._send(request)
+        status, body = response.split("\n", 1)
+        if "error" in status:
+            raise ClientError(f"{body}\n")
+        return self._parse(body)
+
+    def _send(self, request: str) -> str:
+        with socket.create_connection((self._ip, self._port), timeout=self._timeout) as s:
+            response = []
             try:
-                data += self.connection.recv(1024)
-            except socket.error as err:
-                raise ClientSocketError("error recv data", err)
+                s.sendall(request.encode())
+                while True:
+                    data = s.recv(4096)
+                    response.append(data)
+                    if len(data) < 4096:
+                        break
+            except socket.timeout:
+                raise ClientError("Timeout error")
+            except OSError:
+                raise ClientError("Error with sockets")
+            
+            return "".join([chunk.decode() for chunk in response])
 
-        # не забываем преобразовывать байты в объекты str для дальнейшей работы
-        decoded_data = data.decode()
-
-        status, payload = decoded_data.split("\n", 1)
-        payload = payload.strip()
-
-        # если получили ошибку - бросаем исключение ClientError
-        if status == "error":
-            raise ClientProtocolError(payload)
-
-        return payload
-
-    def put(self, key, value, timestamp=None):
-        timestamp = timestamp or int(time.time())
-
-        # отправляем запрос команды put
+    def _parse(self, body: str) -> dict:
+        lines = body.split("\n")
+        result = {}
         try:
-            self.connection.sendall(
-                f"put {key} {value} {timestamp}\n".encode()
-            )
-        except socket.error as err:
-            raise ClientSocketError("error send data", err)
-
-        # разбираем ответ
-        self._read()
-
-    def get(self, key):
-        # формируем и отправляем запрос команды get
-        try:
-            self.connection.sendall(
-                f"get {key}\n".encode()
-            )
-        except socket.error as err:
-            raise ClientSocketError("error send data", err)
-
-        # читаем ответ
-        payload = self._read()
-        data = {}
-        if payload == "":
-            return data
-
-        # разбираем ответ для команды get
-        for row in payload.split("\n"):
-            print(row)
-            key, value, timestamp = row.split()
-            print(f"key: {key}\nvalue: {value}\ntimestamp: {timestamp}")
-            if key not in data:
-                data[key] = []
-            data[key].append((int(timestamp), float(value)))
-
-        return data
-
-    def close(self):
-        try:
-            self.connection.close()
-        except socket.error as err:
-            raise ClientSocketError("error close connection", err)
+            for line in lines:
+                if line:
+                    key, value, timestamp = line.split(" ")
+                    if result.get(key) is None:
+                        result[key] = [(int(timestamp), float(value)), ]
+                    else:
+                        result[key].append((int(timestamp), float(value)))
+        except (ValueError, TypeError):
+            raise ClientError(f"Incorrect response: {body}\n")
+        return result
 
 
-def _main():
-    # проверка работы клиента
-    client = Client("127.0.0.1", 8888, timeout=5)
-    client.put("test", 0.5, timestamp=1)
-    client.put("test", 2.0, timestamp=2)
-    client.put("test", 0.5, timestamp=3)
-    client.put("load", 3, timestamp=4)
-    client.put("load", 4, timestamp=5)
-    print(client.get("*"))
-    
-    client.close()
+if __name__ == "__main__":
+    client = Client("127.0.0.1", 10000, timeout=2)
+    client.put("test", 0.5, 1)
 
 
 if __name__ == "__main__":
